@@ -125,11 +125,11 @@
 Чеклисты обновляем по мере выполнения (`[ ]` → `[x]`).
 
 ### Фаза 0 — Скелет (3–5 дней)
-- [ ] Инициализация Gradle-проекта (Kotlin DSL), структура модулей
-- [ ] Docker Compose: PostgreSQL, Redis, Kafka
-- [ ] Flyway + базовая схема БД
-- [ ] `auth`: регистрация/логин, JWT, роли TEACHER/STUDENT
-- [ ] Actuator health-check, GitHub Actions CI (build + test)
+- [x] Инициализация Gradle-проекта (Kotlin DSL), структура модулей
+- [x] Docker Compose: PostgreSQL, Redis, Kafka
+- [x] Flyway + базовая схема БД
+- [x] `auth`: регистрация/логин, JWT, роли TEACHER/STUDENT
+- [x] Actuator health-check, GitHub Actions CI (build + test)
 
 ### Фаза 1 — Курсы и ученики
 - [ ] `courses`: CRUD курсов, лекций, материалов
