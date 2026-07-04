@@ -31,6 +31,12 @@ application-local.properties
 **/redis-data/
 **/kafka-data/
 
+# === Локальные файлы БД (SQLite/H2 в тестах, дампы) ===
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+
 # === OS ===
 .DS_Store
 Thumbs.db
