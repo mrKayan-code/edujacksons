@@ -1,0 +1,36 @@
+# === Java / Gradle ===
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+*.class
+*.log
+
+# === IDE ===
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# === Node / Next.js (frontend) ===
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+.turbo/
+
+# === Секреты и локальная среда ===
+.env
+.env.local
+*.local
+application-local.yml
+application-local.properties
+
+# === Docker / данные ===
+**/pgdata/
+**/redis-data/
+**/kafka-data/
+
+# === OS ===
+.DS_Store
+Thumbs.db
