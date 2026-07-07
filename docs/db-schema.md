@@ -15,14 +15,24 @@
 - Email хранится нормализованным (lower-case), уникальный индекс `ux_users_email`.
 - Пароли — BCrypt. Роль — `varchar(32)` + CHECK-constraint.
 
-### courses
-- `courses(id, owner_id, title, description, ...)`
-- `materials(id, course_id, type, title, body, order_index, ...)`
+### courses ✅ реализовано (Фаза 1, `V2__courses_and_groups.sql`)
+- `courses(id UUID pk, owner_id UUID, title varchar(200), description text, created_at, updated_at)`
+  - `owner_id` → `users.id` (учитель) **без FK** — межмодульно, ссылка по id. Индекс `ix_courses_owner`.
+- `materials(id UUID pk, course_id UUID → courses(id) ON DELETE CASCADE, type varchar(32),
+  title varchar(200), body text, order_index int, created_at, updated_at)`
+  - `type` — CHECK `IN ('LECTURE')`, enum расширяемый (позже FILE/VIDEO/LINK). Индекс `ix_materials_course`.
+  - `body` — markdown; слайды разделяются `---`, диаграммы — ```mermaid, допустим inline HTML/CSS.
 
-### groups
-- `groups(id, owner_id, title, ...)`
-- `group_members(group_id, student_id, joined_at)`
-- `assignments(id, group_id, problem_id | material_id, deadline, ...)`
+### groups ✅ реализовано (Фаза 1, `V2__courses_and_groups.sql`)
+- `groups(id UUID pk, owner_id UUID, title varchar(200), created_at, updated_at)`
+  - `owner_id` → `users.id` без FK. Имя таблицы `groups` в PostgreSQL допустимо (non-reserved).
+- `group_members(id UUID pk, group_id UUID → groups(id) ON DELETE CASCADE, student_id UUID,
+  created_at, updated_at)` — UNIQUE `(group_id, student_id)`; `student_id` → `users.id` без FK.
+  Суррогатный id (ради `BaseEntity` + `created_at`/`updated_at` везде); `created_at` = момент вступления.
+- `group_courses(id UUID pk, group_id UUID → groups(id) ON DELETE CASCADE, course_id UUID,
+  created_at, updated_at)` — UNIQUE `(group_id, course_id)`; `course_id` → `courses.id` без FK.
+  Привязка курса к группе («назначение» Фазы 1). `created_at` = момент назначения.
+- `assignments(id, group_id, problem_id | material_id, deadline, ...)` — задачи/дедлайны: **Фаза 2**.
 
 ### problems
 - `problems(id, owner_id, title, statement, language, time_limit_ms, memory_limit_kb, ...)`
