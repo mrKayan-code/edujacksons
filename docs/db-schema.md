@@ -10,8 +10,10 @@
 
 ## Обзор таблиц (черновик, уточняется по фазам)
 
-### auth
-- `users(id, email, password_hash, role, display_name, created_at, ...)`
+### auth ✅ реализовано (Фаза 0, `V1__init_auth.sql`)
+- `users(id UUID pk, email unique, password_hash, role ∈ {TEACHER,STUDENT}, display_name, created_at, updated_at)`
+- Email хранится нормализованным (lower-case), уникальный индекс `ux_users_email`.
+- Пароли — BCrypt. Роль — `varchar(32)` + CHECK-constraint.
 
 ### courses
 - `courses(id, owner_id, title, description, ...)`
