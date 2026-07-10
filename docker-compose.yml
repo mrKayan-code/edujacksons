@@ -57,7 +57,62 @@ services:
       timeout: 10s
       retries: 10
 
+  # ── Judge0 (опционально, профиль judge0) ──────────────────────────────────────
+  # Запуск: docker compose --profile judge0 up -d
+  # Тяжёлый стек (свои postgres+redis+воркеры), требует privileged + доступ к cgroups для
+  # изоляции исполнения. Для интеграционных тестов НЕ нужен — там CodeExecutor подменяется fake.
+  # Значения — отправная точка; тонкая настройка Judge0 — тема сессии деплоя (task.md §9).
+  judge0:
+    image: judge0/judge0:1.13.1
+    container_name: edu-judge0
+    profiles: ["judge0"]
+    ports:
+      - "2358:2358"
+    privileged: true
+    environment: &judge0-env
+      REDIS_HOST: judge0-redis
+      REDIS_PORT: "6379"
+      POSTGRES_HOST: judge0-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    restart: unless-stopped
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: edu-judge0-workers
+    profiles: ["judge0"]
+    command: ["./scripts/workers"]
+    privileged: true
+    environment: *judge0-env
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    restart: unless-stopped
+
+  judge0-db:
+    image: postgres:16-alpine
+    container_name: edu-judge0-db
+    profiles: ["judge0"]
+    environment:
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+    volumes:
+      - judge0-pgdata:/var/lib/postgresql/data
+
+  judge0-redis:
+    image: redis:7-alpine
+    container_name: edu-judge0-redis
+    profiles: ["judge0"]
+    command: ["redis-server", "--appendonly", "no"]
+
 volumes:
   pgdata:
   redisdata:
   kafkadata:
+  judge0-pgdata:

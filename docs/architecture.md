@@ -30,10 +30,38 @@
 Так модули ссылаются на интерфейсы друг друга (цикл на уровне модулей), но граф бинов остаётся
 **ацикличным** — Spring поднимается без `allow-circular-references`. Обоснование — ADR `0004`.
 
-## Асинхронность
-- `submissions → judge` через **Kafka** (топик заявок на проверку, топик результатов).
-- Это заранее «микросервисный» контракт: при выносе `judge-service` меняется только
-  транспорт/деплой, не логика.
+## Границы модулей на практике (Фаза 2)
+Добавлены `problems`, `submissions`, `judge`. Граф пакетов — DAG:
+```
+submissions ──► problems ──► courses ──► auth
+     │             (ProblemDirectory: canAccess/ownsProblem/executionSpec;
+     │              problems переиспользует CourseDirectory + CourseAccessQuery)
+     └────────► judge.api (контракт событий: JudgeRequest/JudgeResult/Verdict/JudgeTopics)
+judge ──► common (Language) + собственный judge.api  (не зависит от problems/submissions)
+```
+- `problems.ProblemDirectory` (провайдер-сторона, зависимость односторонняя) — доступ к задаче и
+  спецификация проверки для `submissions`; адаптер-лист над репозиториями + `CourseAccessQuery`.
+- `judge` изолирован: контракт событий — его публичный API, кандидат №1 на вынос в микросервис.
+
+## Асинхронность (Фаза 2, реализовано)
+Поток проверки решения:
+```
+POST /api/problems/{id}/submissions
+        │ (сохранить QUEUED, коммит)
+        ▼
+  topic judge.requests  ──►  judge: CodeExecutor (Judge0) по каждому тесту → сверка вывода
+        ▲                          │  агрегация вердикта (JudgeService)
+        │                          ▼
+   submissions            topic judge.results
+   (проставить вердикт  ◄──────────┘
+    + по-тестовые результаты, статус FINISHED/FAILED)
+```
+- Топики: `judge.requests` (заявки), `judge.results` (итоги). Сериализация — JSON.
+- `JudgeRequest` **самодостаточен** (код + тесты + лимиты): судья не ходит в чужие таблицы.
+- Заранее «микросервисный» контракт: при выносе `judge-service` меняется только транспорт/деплой,
+  не логика. `CodeExecutor` изолирует бэкенд исполнения (Judge0 → свой sandbox позже). ADR `0006`.
+- `Judge0CodeExecutor` только запускает код; сверку вывода и вердикт считает `JudgeService`
+  (тестируется юнит-тестом с fake-исполнителем, без Docker).
 
 ## Целевая эволюция
 1. Монолит (MVP).
@@ -42,4 +70,4 @@
 
 ## Диаграммы
 - [ ] C4 context/container (добавить)
-- [ ] Схема потоков проверки решения (добавить в Фазе 2)
+- [x] Схема потоков проверки решения (см. раздел «Асинхронность» выше; детальная — за doc-агентом)
