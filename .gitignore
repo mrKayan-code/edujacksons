@@ -11,6 +11,7 @@ out/
 *.iml
 .vscode/
 *.swp
+bin/
 
 # === Node / Next.js (frontend) ===
 node_modules/
@@ -40,3 +41,4 @@ application-local.properties
 # === OS ===
 .DS_Store
 Thumbs.db
+.aider*
