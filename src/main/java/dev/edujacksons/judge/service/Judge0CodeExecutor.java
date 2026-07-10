@@ -15,9 +15,15 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * Исполнитель на self-hosted Judge0 (REST). Одна заявка Judge0 на каждый тест, синхронно
- * ({@code wait=true}). Ожидаемый вывод в Judge0 не передаём — сверку делает {@link JudgeService},
- * поэтому статус Judge0 маппим только на «как отработал процесс». В тестах подменяется fake-бином.
+ * Реализация исполнителя кода на базе self-hosted Judge0 (через REST API).
+ * <p>
+ * Особенности реализации:
+ * 1. **Синхронный режим**: Использует параметр {@code wait=true}, чтобы получить результат
+ *    исполнения в одном HTTP-ответе. Это упрощает обработку одного теста.
+ * 2. **Отделение от проверки**: Не передает ожидаемый вывод в Judge0. Сверка выполняется
+ *    в {@link JudgeService}, что делает систему независимой от реализации Judge0.
+ * 3. **Маппинг статусов**: Преобразует числовые ID статусов Judge0 в внутренний {@link ExecutionStatus}.
+ * 4. **Изоляция**: В тестах этот компонент подменяется fake-бином для исключения зависимости от Docker.
  */
 @Component
 public class Judge0CodeExecutor implements CodeExecutor {

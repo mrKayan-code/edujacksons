@@ -44,7 +44,16 @@ public class ProblemService {
 
     /**
      * Создаёт задачу в курсе учителя вместе с начальным набором тестов.
-     * Курс должен существовать и принадлежать вызывающему учителю.
+     * <p>
+     * Процесс включает:
+     * 1. Проверку существования курса и владения им пользователем через {@link CourseDirectory}.
+     * 2. Сохранение основной сущности {@link Problem}.
+     * 3. Массовое создание тестовых случаев, если они переданы в запросе.
+     *
+     * @param ownerId  id преподавателя-владельца
+     * @param request  данные задачи (заголовок, условие, лимиты, тесты)
+     * @return созданный объект {@link Problem}
+     * @throws CourseNotFoundException если курс не найден или не принадлежит пользователю
      */
     @Transactional
     public Problem create(UUID ownerId, CreateProblemRequest request) {
@@ -62,6 +71,18 @@ public class ProblemService {
         return problem;
     }
 
+    /**
+     * Обновляет параметры существующей задачи.
+     * <p>
+     * Доступно только владельцу задачи. Если задача принадлежит другому пользователю,
+     * выбрасывается {@link ForbiddenException}.
+     *
+     * @param problemId id обновляемой задачи
+     * @param actorId   id пользователя, совершающего действие
+     * @param request   новые данные задачи (заголовок, условие, лимиты)
+     * @return обновленный объект {@link Problem}
+     * @throws ForbiddenException если пользователь не является владельцем задачи
+     */
     @Transactional
     public Problem update(UUID problemId, UUID actorId, UpdateProblemRequest request) {
         Problem problem = requireOwned(problemId, actorId);
@@ -73,17 +94,49 @@ public class ProblemService {
         return problem;
     }
 
+    /**
+     * Удаляет задачу из системы.
+     * <p>
+     * Доступно только владельцу задачи.
+     *
+     * @param problemId id удаляемой задачи
+     * @param actorId   id пользователя, совершающего действие
+     * @throws ForbiddenException если пользователь не является владельцем задачи
+     */
     @Transactional
     public void delete(UUID problemId, UUID actorId) {
         problemRepository.delete(requireOwned(problemId, actorId));
     }
 
+    /**
+     * Возвращает список всех задач курса, доступных пользователю.
+     * <p>
+     * Доступ предоставляется, если:
+     * - Пользователь владеет курсом.
+     * - Пользователь является учеником, имеющим доступ к курсу через группу.
+     *
+     * @param courseId id курса
+     * @param actorId  id пользователя
+     * @return список задач, отсортированный по дате создания (DESC)
+     * @throws ForbiddenException если доступ к курсу запрещен
+     */
     @Transactional(readOnly = true)
     public List<Problem> listByCourse(UUID courseId, UUID actorId) {
         requireCourseReadAccess(courseId, actorId);
         return problemRepository.findByCourseIdOrderByCreatedAtDesc(courseId);
     }
 
+    /**
+     * Возвращает данные конкретной задачи, если у пользователя есть права на её чтение.
+     * <p>
+     * Доступ разрешен владельцу или ученику с доступом к курсу задачи.
+     *
+     * @param problemId id задачи
+     * @param actorId   id пользователя
+     * @return объект {@link Problem}
+     * @throws ProblemNotFoundException если задача не найдена
+     * @throws ForbiddenException       если доступ запрещен
+     */
     @Transactional(readOnly = true)
     public Problem getReadable(UUID problemId, UUID actorId) {
         Problem problem = requireProblem(problemId);
@@ -93,6 +146,18 @@ public class ProblemService {
 
     // ── тесты ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Добавляет новый тестовый случай к задаче.
+     * <p>
+     * Доступно только владельцу задачи. Если {@code orderIndex} не указан,
+     * он будет вычислен автоматически (следующий после последнего теста).
+     *
+     * @param problemId  id задачи
+     * @param actorId    id владельца задачи
+     * @param request    данные теста (вход, ожидаемый вывод, является ли примером)
+     * @return созданный {@link TestCase}
+     * @throws ForbiddenException если пользователь не является владельцем задачи
+     */
     @Transactional
     public TestCase addTestCase(UUID problemId, UUID actorId, CreateTestCaseRequest request) {
         requireOwned(problemId, actorId);
@@ -101,6 +166,17 @@ public class ProblemService {
                 request.expectedOutput(), Boolean.TRUE.equals(request.sample()), orderIndex));
     }
 
+    /**
+     * Удаляет конкретный тестовый случай.
+     * <p>
+     * Доступно только владельцу задачи.
+     *
+     * @param problemId   id задачи
+     * @param testCaseId  id теста
+     * @param actorId     id владельца задачи
+     * @throws TestCaseNotFoundException если тест с таким id не найден в данной задаче
+     * @throws ForbiddenException        если пользователь не владелец задачи
+     */
     @Transactional
     public void deleteTestCase(UUID problemId, UUID testCaseId, UUID actorId) {
         requireOwned(problemId, actorId);
@@ -108,14 +184,34 @@ public class ProblemService {
                 .orElseThrow(() -> new TestCaseNotFoundException(testCaseId)));
     }
 
-    /** Все тесты задачи — только для владельца (скрытые тесты наружу не отдаём). */
+    /**
+     * Возвращает ВСЕ тестовые случаи задачи (включая скрытые).
+     * <p>
+     * **Внимание**: Данный метод доступен ТОЛЬКО владельцу задачи. 
+     * Скрытые тесты никогда не должны попадать в API для учеников.
+     *
+     * @param problemId id задачи
+     * @param actorId   id пользователя
+     * @return список всех тестов, отсортированный по индексу порядка
+     * @throws ForbiddenException если пользователь не владелец задачи
+     */
     @Transactional(readOnly = true)
     public List<TestCase> listAllTests(UUID problemId, UUID actorId) {
         requireOwned(problemId, actorId);
         return testCaseRepository.findByProblemIdOrderByOrderIndexAsc(problemId);
     }
 
-    /** Открытые (sample) тесты задачи — видны любому, у кого есть доступ к задаче. */
+    /**
+     * Возвращает только открытые (sample) тестовые случаи задачи.
+     * <p>
+     * Эти тесты доступны любому пользователю, имеющему доступ к задаче.
+     * Они используются для демонстрации формата ввода-вывода в условии задачи.
+     *
+     * @param problemId id задачи
+     * @param actorId   id пользователя
+     * @return список открытых тестов, отсортированный по индексу порядка
+     * @throws ForbiddenException если доступ к задаче запрещен
+     */
     @Transactional(readOnly = true)
     public List<TestCase> listSampleTests(UUID problemId, UUID actorId) {
         requireReadAccess(requireProblem(problemId), actorId);

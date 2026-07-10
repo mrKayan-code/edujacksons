@@ -1,7 +1,7 @@
 # API-контракты (REST)
 
 > API-first: фронт и любой будущий клиент (в т.ч. мобилка) работают с этими контрактами.
-> Заполняется по фазам. Стиль: JSON, версия под префиксом `/api/v1`.
+> Заполняется по фазам. Стиль: JSON, версия под префиксом `/api/v1` (в будущем).
 
 ## Общее
 - Аутентификация: `Authorization: Bearer <JWT>`.
@@ -48,8 +48,8 @@
 
 ### Фаза 2 — problems / submissions ✅ реализовано
 > Путь без `/v1` — как у auth/courses (`/api/...`); версионирование добавим позже единообразно.
-> Записи задач — только TEACHER-владелец курса; чтение задачи — владелец или ученик с доступом к курсу.
-> Ученику в задаче видны только открытые (sample) тесты; скрытые — никогда.
+> Роли: записи задач (POST/PATCH/DELETE) — TEACHER-владелец курса; чтение задачи — владелец или
+> ученик с доступом к курсу. Ученику в задаче видны только открытые (sample) тесты; скрытые — никогда.
 
 **problems**
 - `POST   /api/problems` (TEACHER) — `{courseId, title, statement, language, timeLimitMs, memoryLimitKb, tests?[]}`
@@ -58,13 +58,15 @@
 - `GET    /api/problems/{id}` — условие + видимые тесты (владельцу все, ученику только sample)
 - `PATCH  /api/problems/{id}` (TEACHER, владелец)
 - `DELETE /api/problems/{id}` (TEACHER, владелец)
-- `POST   /api/problems/{id}/tests` (TEACHER, владелец) — добавить тест
+- `POST   /api/problems/{id}/tests` (TEACHER, владелец) — добавить тест `{input, expectedOutput, sample?, orderIndex?}`
 - `GET    /api/problems/{id}/tests` (TEACHER, владелец) — все тесты
 - `DELETE /api/problems/{id}/tests/{testId}` (TEACHER, владелец)
 
 **submissions**
-- `POST /api/problems/{id}/submissions` — `{language, sourceCode}`; доступ к задаче обязателен.
-  Проверка асинхронна → сразу `201` с `{ id, status: "QUEUED", ... }`
+> Отправлять решение может любой аутентифицированный с доступом к задаче (гейт в сервисе через
+> `ProblemDirectory`, владелец-учитель тоже может); чтение решения — автор или владелец задачи.
+- `POST /api/problems/{id}/submissions` — `{language, sourceCode}`; проверка асинхронна →
+  сразу `201` с `{ id, status: "QUEUED", ... }`
 - `GET  /api/problems/{id}/submissions` — свои решения по задаче (история)
 - `GET  /api/submissions/{id}` — статус/вердикт + результаты по тестам (автор или владелец задачи)
 
@@ -79,6 +81,4 @@
 ### Фаза 4 — ege
 - `GET  /api/v1/ege/variants`, `GET /api/v1/ege/variants/{id}`
 - `POST /api/v1/ege/variants/{id}/attempts`
-- `POST /api/v1/ege/attempts/{id}/answers` → автосверка
-
-> Точные схемы запросов/ответов детализируем в начале каждой фазы.
+- `POST /api/v1/ege/attempts/{id}/answers` $\to$ автосверка

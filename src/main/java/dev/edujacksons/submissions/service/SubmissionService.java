@@ -42,8 +42,24 @@ public class SubmissionService {
     }
 
     /**
-     * Принимает решение на проверку: валидирует доступ и язык, сохраняет QUEUED и ставит заявку
-     * судье в очередь. Возвращает сохранённое решение (статус QUEUED).
+     * Принимает решение на проверку и инициирует асинхронный конвейер проверки.
+     * <p>
+     * Процесс включает:
+     * 1. Валидацию существования задачи и прав доступа ученика через {@link ProblemDirectory}.
+     * 2. Проверку соответствия выбранного языка программирования спецификации задачи.
+     * 3. Сохранение попытки в БД со статусом {@link SubmissionStatus#QUEUED}.
+     * 4. Публикацию самодостаточного сообщения {@link JudgeRequest} в Kafka (топик {@code judge.requests}).
+     * <p>
+     * <b>Важно:</b> Сохранение в БД происходит в отдельной транзакции до публикации в Kafka. 
+     * Это гарантирует, что когда судья вернет результат, запись о решении уже будет видна в БД.
+     *
+     * @param studentId  id ученика, отправляющего решение
+     * @param problemId  id задачи
+     * @param request    данные решения (исходный код, язык)
+     * @return созданный объект {@link Submission} со статусом QUEUED
+     * @throws ProblemNotFoundException если задача не найдена
+     * @throws ForbiddenException       если у ученика нет доступа к этой задаче
+     * @throws InvalidLanguageException если язык решения не совпадает с требуемым для задачи
      */
     public Submission submit(UUID studentId, UUID problemId, CreateSubmissionRequest request) {
         ProblemExecutionSpec spec = problemDirectory.executionSpec(problemId)
@@ -72,6 +88,19 @@ public class SubmissionService {
         kafkaTemplate.send(JudgeTopics.REQUESTS, submission.getId().toString(), request);
     }
 
+    /**
+     * Возвращает данные попытки решения, если у пользователя есть права на её чтение.
+     * <p>
+     * Доступ разрешен:
+     * - Автору решения (ученику).
+     * - Владельцу задачи, к которой относится решение.
+     *
+     * @param submissionId id попытки
+     * @param actorId      id пользователя
+     * @return объект {@link Submission}
+     * @throws SubmissionNotFoundException если решение не найдено
+     * @throws ForbiddenException          если доступ запрещен
+     */
     @Transactional(readOnly = true)
     public Submission getReadable(UUID submissionId, UUID actorId) {
         Submission submission = submissionRepository.findById(submissionId)
@@ -84,12 +113,30 @@ public class SubmissionService {
         return submission;
     }
 
+    /**
+     * Возвращает детальные результаты проверки по каждому тестовому случаю.
+     * <p>
+     * Метод сначала проверяет права доступа к решению через {@link #getReadable}.
+     *
+     * @param submissionId id попытки
+     * @param actorId      id пользователя
+     * @return список результатов {@link SubmissionResult}, отсортированный по индексу теста
+     * @throws ForbiddenException если доступ запрещен
+     */
     @Transactional(readOnly = true)
     public List<SubmissionResult> results(UUID submissionId, UUID actorId) {
         getReadable(submissionId, actorId);
         return resultRepository.findBySubmissionIdOrderByOrderIndexAsc(submissionId);
     }
 
+    /**
+     * Возвращает историю всех попыток конкретного ученика по конкретной задаче.
+     * Сортировка: от новых к старым.
+     *
+     * @param problemId id задачи
+     * @param studentId id ученика
+     * @return список попыток {@link Submission}
+     */
     @Transactional(readOnly = true)
     public List<Submission> listForProblem(UUID problemId, UUID studentId) {
         return submissionRepository.findByProblemIdAndStudentIdOrderByCreatedAtDesc(problemId, studentId);
