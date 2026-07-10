@@ -9,7 +9,6 @@ import dev.edujacksons.courses.domain.Course;
 import dev.edujacksons.courses.domain.Material;
 import dev.edujacksons.courses.repository.CourseRepository;
 import dev.edujacksons.courses.repository.MaterialRepository;
-import dev.edujacksons.groups.service.CourseAccessQuery;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,11 +40,30 @@ public class CourseService {
 
     // ── курсы ────────────────────────────────────────────────────────────────
 
+    /**
+     * Создает новый курс.
+     *
+     * @param ownerId id преподавателя-владельца
+     * @param request данные курса (заголовок, описание)
+     * @return созданный объект {@link Course}
+     */
     @Transactional
     public Course create(UUID ownerId, CreateCourseRequest request) {
         return courseRepository.save(new Course(ownerId, request.title(), request.description()));
     }
 
+    /**
+     * Обновляет данные существующего курса.
+     * <p>
+     * Доступно только владельцу курса. Если курс принадлежит другому пользователю,
+     * выбрасывается {@link ForbiddenException}.
+     *
+     * @param courseId id обновляемого курса
+     * @param actorId  id пользователя, совершающего действие
+     * @param request  новые данные курса
+     * @return обновленный объект {@link Course}
+     * @throws ForbiddenException если пользователь не является владельцем курса
+     */
     @Transactional
     public Course update(UUID courseId, UUID actorId, UpdateCourseRequest request) {
         Course course = requireOwned(courseId, actorId);
@@ -54,14 +72,30 @@ public class CourseService {
         return course;
     }
 
+    /**
+     * Удаляет курс из системы.
+     * <p>
+     * Доступно только владельцу курса.
+     *
+     * @param courseId id удаляемого курса
+     * @param actorId  id пользователя, совершающего действие
+     * @throws ForbiddenException если пользователь не является владельцем курса
+     */
     @Transactional
     public void delete(UUID courseId, UUID actorId) {
         courseRepository.delete(requireOwned(courseId, actorId));
     }
 
     /**
-     * Курсы, видимые актору: свои (если учитель-владелец) + доступные через группы (если ученик).
-     * Роль различать не нужно — множества естественно пусты для «не той» роли.
+     * Возвращает список всех курсов, которые доступны пользователю.
+     * <p>
+     * Список включает:
+     * 1. Курсы, где пользователь является владельцем (для учителей).
+     * 2. Курсы, которые были назначены группам, в которых состоит пользователь (для учеников).
+     * Результаты объединяются и сортируются по дате создания (сначала новые).
+     *
+     * @param actorId id пользователя, для которого ищутся курсы
+     * @return отсортированный список доступных курсов
      */
     @Transactional(readOnly = true)
     public List<Course> listVisible(UUID actorId) {
@@ -78,7 +112,19 @@ public class CourseService {
         return List.copyOf(byId.values());
     }
 
-    /** Курс, если актор — владелец или ученик с доступом; иначе 404/403. */
+    /**
+     * Возвращает данные конкретного курса, если у пользователя есть права на его чтение.
+     * <p>
+     * Доступ разрешен, если:
+     * - Пользователь является владельцем курса.
+     * - Пользователь имеет доступ через привязку к группе.
+     *
+     * @param courseId id курса
+     * @param actorId  id пользователя, запрашивающего доступ
+     * @return объект {@link Course}
+     * @throws CourseNotFoundException если курс не найден
+     * @throws ForbiddenException      если у пользователя нет прав на чтение
+     */
     @Transactional(readOnly = true)
     public Course getReadable(UUID courseId, UUID actorId) {
         Course course = courseRepository.findById(courseId)

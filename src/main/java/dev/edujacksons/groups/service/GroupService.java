@@ -46,16 +46,39 @@ public class GroupService {
 
     // ── группы ────────────────────────────────────────────────────────────────
 
+    /**
+     * Создает новую группу.
+     *
+     * @param ownerId id преподавателя, который будет владельцем группы
+     * @param title   название группы
+     * @return созданный объект {@link Group}
+     */
     @Transactional
     public Group create(UUID ownerId, String title) {
         return groupRepository.save(new Group(ownerId, title));
     }
 
+    /**
+     * Возвращает список всех групп, созданных данным преподавателем.
+     * Сортировка: от новых к старым.
+     *
+     * @param ownerId id преподавателя
+     * @return список групп
+     */
     @Transactional(readOnly = true)
     public List<Group> listOwned(UUID ownerId) {
         return groupRepository.findByOwnerIdOrderByCreatedAtDesc(ownerId);
     }
 
+    /**
+     * Возвращает подробную информацию о группе, включая список её участников и назначенных курсов.
+     *
+     * @param groupId id группы
+     * @param ownerId id пользователя, запрашивающего данные (должен быть владельцем)
+     * @return {@link GroupDetail} с полной информацией о группе
+     * @throws ForbiddenException если пользователь не является владельцем группы
+     * @throws GroupNotFoundException если группа не найдена
+     */
     @Transactional(readOnly = true)
     public GroupDetail getDetail(UUID groupId, UUID ownerId) {
         Group group = requireOwned(groupId, ownerId);
@@ -68,6 +91,24 @@ public class GroupService {
 
     // ── участники ────────────────────────────────────────────────────────────
 
+    /**
+     * Добавляет нового участника в группу по его email.
+     * <p>
+     * Проверки:
+     * 1. Владелец группы должен иметь право на изменение состава.
+     * 2. Пользователь с таким email должен существовать в системе.
+     * 3. Пользователь должен иметь роль {@link Role#STUDENT}.
+     * 4. Пользователь не должен быть уже членом данной группы.
+     *
+     * @param groupId  id группы
+     * @param ownerId  id владельца группы, совершающего действие
+     * @param email    email ученика для добавления
+     * @return {@link MemberView} с данными добавленного участника
+     * @throws StudentNotFoundException если пользователь с таким email не найден
+     * @throws NotAStudentException      если пользователь имеет роль, отличную от STUDENT
+     * @throws AlreadyMemberException    если пользователь уже состоит в этой группе
+     * @throws ForbiddenException        если пользователь не является владельцем группы
+     */
     @Transactional
     public MemberView addMember(UUID groupId, UUID ownerId, String email) {
         requireOwned(groupId, ownerId);
@@ -83,6 +124,14 @@ public class GroupService {
         return new MemberView(user.id(), user.email(), user.displayName(), member.getCreatedAt());
     }
 
+    /**
+     * Удаляет ученика из группы.
+     *
+     * @param groupId   id группы
+     * @param ownerId   id владельца группы, совершающего действие
+     * @param studentId id удаляемого ученика
+     * @throws ForbiddenException если пользователь не является владельцем группы
+     */
     @Transactional
     public void removeMember(UUID groupId, UUID ownerId, UUID studentId) {
         requireOwned(groupId, ownerId);
@@ -91,7 +140,18 @@ public class GroupService {
 
     // ── назначение курсов ──────────────────────────────────────────────────────
 
-    /** Привязывает курс к группе. Идемпотентно: повторная привязка не создаёт дубликат. */
+    /**
+     * Привязывает курс к группе.
+     * <p>
+     * Операция идемпотентна. Проверяется, что курс принадлежит тому же преподавателю,
+     * который владеет группой, чтобы исключить назначение чужих курсов.
+     *
+     * @param groupId  id группы
+     * @param ownerId  id владельца группы
+     * @param courseId id курса для назначения
+     * @throws CourseNotAssignableException если курс не принадлежит владельцу группы
+     * @throws ForbiddenException           если пользователь не является владельцем группы
+     */
     @Transactional
     public void assignCourse(UUID groupId, UUID ownerId, UUID courseId) {
         requireOwned(groupId, ownerId);
@@ -103,6 +163,14 @@ public class GroupService {
         }
     }
 
+    /**
+     * Отвязывает курс от группы.
+     *
+     * @param groupId  id группы
+     * @param ownerId  id владельца группы
+     * @param courseId id курса для отвязки
+     * @throws ForbiddenException если пользователь не является владельцем группы
+     */
     @Transactional
     public void unassignCourse(UUID groupId, UUID ownerId, UUID courseId) {
         requireOwned(groupId, ownerId);

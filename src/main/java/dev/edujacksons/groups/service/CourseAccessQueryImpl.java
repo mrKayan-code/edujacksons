@@ -1,5 +1,6 @@
 package dev.edujacksons.groups.service;
 
+import dev.edujacksons.courses.service.CourseAccessQuery;
 import dev.edujacksons.groups.repository.GroupCourseRepository;
 import java.util.Set;
 import java.util.UUID;

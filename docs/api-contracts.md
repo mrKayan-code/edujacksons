@@ -11,10 +11,10 @@
 ## Черновик эндпоинтов по фазам
 
 ### Фаза 0 — auth
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login` → `{ accessToken, refreshToken }`
-- `POST /api/v1/auth/refresh`
-- `GET  /api/v1/me`
+- `POST /api/auth/register`
+- `POST /api/auth/login` → `{ accessToken, expiration, user }`
+- `GET  /api/auth/me`
+- `POST /api/auth/refresh` (планируется)
 
 ### Фаза 1 — courses / groups ✅ реализовано
 > Путь без `/v1` — как у auth (`/api/...`); версионирование добавим позже единообразно.

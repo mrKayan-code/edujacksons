@@ -29,7 +29,19 @@ public class JwtService {
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Выпускает access-токен для пользователя. */
+    /**
+     * Создает подписанный JWT-токен доступа для пользователя.
+     * <p>
+     * В payload токена записываются следующие claims:
+     * - {@code sub} (Subject): ID пользователя (UUID)
+     * - {@code email}: email пользователя
+     * - {@code role}: роль пользователя (строковое представление)
+     * - {@code iat}: время выпуска
+     * - {@code exp}: время истечения (из настроек {@link JwtProperties})
+     *
+     * @param user пользователь, для которого выпускается токен
+     * @return строка JWT-токена в формате Header.Payload.Signature
+     */
     public String issueToken(User user) {
         Instant now = Instant.now();
         Instant expiry = now.plus(properties.expiration());
@@ -50,7 +62,14 @@ public class JwtService {
     }
 
     /**
-     * Разбирает и валидирует токен (подпись + срок). Бросает {@link JwtException} при любой проблеме.
+     * Декодирует JWT-токен, проверяет его цифровую подпись и срок действия.
+     * <p>
+     * Если подпись не совпадает с секретным ключом или токен просрочен,
+     * библиотека io.jsonwebtoken выбрасывает {@link JwtException}.
+     *
+     * @param token строка JWT-токена
+     * @return {@link ParsedToken} с данными, извлеченными из claims
+     * @throws JwtException если токен невалиден, поврежден или просрочен
      */
     public ParsedToken parse(String token) {
         Claims claims = Jwts.parser()
@@ -65,7 +84,13 @@ public class JwtService {
         );
     }
 
-    /** Разобранные данные токена. */
+    /**
+     * Контейнер для данных, извлеченных из валидного JWT-токена.
+     *
+     * @param userId уникальный идентификатор пользователя (из {@code sub} claim)
+     * @param email  email пользователя (из кастомного {@code email} claim)
+     * @param role   роль пользователя (из кастомного {@code role} claim)
+     */
     public record ParsedToken(UUID userId, String email, Role role) {
     }
 }

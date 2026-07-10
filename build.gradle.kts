@@ -73,4 +73,8 @@ val integrationTest by tasks.registering(Test::class) {
     shouldRunAfter(tasks.test)
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
+    // docker-java пингует сокет дефолтным API 1.32; Docker Engine 25+ требует минимум 1.40.
+    // Фиксируем современную версию API, чтобы Testcontainers стартовал на свежих демонах.
+    // Переопределяется свойством -PdockerApiVersion=... при необходимости.
+    systemProperty("api.version", providers.gradleProperty("dockerApiVersion").getOrElse("1.44"))
 }
