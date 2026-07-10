@@ -27,9 +27,21 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    # Конвейер проверки submissions → judge. Значения событий — JSON; тип берётся из заголовка
+    # __TypeId__ (JsonSerializer проставляет), поэтому один consumer-factory обслуживает оба топика.
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "dev.edujacksons.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-# Инфраструктура (Redis/Kafka) подключается лениво — на Фазе 0 ещё не используется,
-# приложение стартует без запущенных Redis/Kafka.
+# Redis (кэш/сессии) пока не используется — подключается лениво, приложение стартует без него.
+# Kafka с Фазы 2 нужна для проверки решений: без брокера @KafkaListener'ы не поднимут соединение
+# (приложение при этом стартует), а отправка решений «зависнет» в статусе QUEUED.
 
 app:
   jwt:
@@ -37,6 +49,10 @@ app:
     secret: ${JWT_SECRET:dev-secret-change-me-please-min-32-bytes-long}
     expiration: ${JWT_EXPIRATION:PT24H}
     issuer: edujacksons
+
+  judge0:
+    # Self-hosted Judge0 (docker-compose, профиль judge0). В проде — адрес из окружения.
+    base-url: ${JUDGE0_URL:http://localhost:2358}
 
 management:
   endpoints:

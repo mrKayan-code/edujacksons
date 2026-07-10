@@ -46,10 +46,32 @@
 `material_not_found`/`student_not_found` (404), `not_a_student`/`already_member` (409),
 `validation_failed` (400).
 
-### Фаза 2 — problems / submissions
-- `POST /api/v1/problems`, `GET /api/v1/problems/{id}`
-- `POST /api/v1/problems/{id}/submissions` → `{ submissionId, status: "QUEUED" }`
-- `GET  /api/v1/submissions/{id}` → статус + результаты по тестам
+### Фаза 2 — problems / submissions ✅ реализовано
+> Путь без `/v1` — как у auth/courses (`/api/...`); версионирование добавим позже единообразно.
+> Записи задач — только TEACHER-владелец курса; чтение задачи — владелец или ученик с доступом к курсу.
+> Ученику в задаче видны только открытые (sample) тесты; скрытые — никогда.
+
+**problems**
+- `POST   /api/problems` (TEACHER) — `{courseId, title, statement, language, timeLimitMs, memoryLimitKb, tests?[]}`
+  (курс должен принадлежать учителю; `tests[]` = `{input, expectedOutput, sample?, orderIndex?}`)
+- `GET    /api/problems?courseId={id}` — задачи курса (гейт доступа к курсу)
+- `GET    /api/problems/{id}` — условие + видимые тесты (владельцу все, ученику только sample)
+- `PATCH  /api/problems/{id}` (TEACHER, владелец)
+- `DELETE /api/problems/{id}` (TEACHER, владелец)
+- `POST   /api/problems/{id}/tests` (TEACHER, владелец) — добавить тест
+- `GET    /api/problems/{id}/tests` (TEACHER, владелец) — все тесты
+- `DELETE /api/problems/{id}/tests/{testId}` (TEACHER, владелец)
+
+**submissions**
+- `POST /api/problems/{id}/submissions` — `{language, sourceCode}`; доступ к задаче обязателен.
+  Проверка асинхронна → сразу `201` с `{ id, status: "QUEUED", ... }`
+- `GET  /api/problems/{id}/submissions` — свои решения по задаче (история)
+- `GET  /api/submissions/{id}` — статус/вердикт + результаты по тестам (автор или владелец задачи)
+
+Статусы: `QUEUED → FINISHED | FAILED`. Вердикт (общий и по тесту): `ACCEPTED`, `WRONG_ANSWER`,
+`TIME_LIMIT_EXCEEDED`, `RUNTIME_ERROR`, `COMPILE_ERROR`, `INTERNAL_ERROR`.
+Коды ошибок: `problem_not_found`/`submission_not_found`/`test_case_not_found` (404),
+`forbidden` (403), `invalid_language` (400), `validation_failed` (400).
 
 ### Фаза 3 — grading
 - `POST /api/v1/submissions/{id}/review` (TEACHER)
