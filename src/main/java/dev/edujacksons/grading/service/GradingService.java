@@ -17,6 +17,14 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис ручного оценивания решений.
+ * 
+ * Обеспечивает логику создания, обновления и просмотра проверок. 
+ * Для взаимодействия с другими модулями использует публичные порты (Directories), 
+ * что позволяет избежать циклической зависимости между модулями grading, 
+ * submissions и problems (согласно ADR 0004).
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -26,7 +34,27 @@ public class GradingService {
     private final SubmissionDirectory submissionDirectory;
     private final ProblemDirectory problemDirectory;
 
+    /**
+     * Создает новую проверку для решения.
+     * <p>
+     * Процесс:
+     * 1. Поиск решения через {@link SubmissionDirectory}.
+     * 2. Проверка отсутствия существующей проверки для этого решения.
+     * 3. Проверка прав: только владелец задачи может выставить оценку (через {@link ProblemDirectory#ownsProblem}).
+     * 4. Валидация публикации: если {@code publish=true}, должна быть указана либо оценка, либо фидбэк.
+     * 5. Сохранение с соответствующим статусом (PUBLISHED или DRAFT).
+     *
+     * @param submissionId id решения
+     * @param request данные проверки (оценка, текст, флаг публикации)
+     * @param actorId id учителя, создающего проверку
+     * @return созданный объект Review в формате ReviewResponse
+     * @throws SubmissionNotFoundException если решение не найдено
+     * @throws ReviewAlreadyExistsException если для решения уже есть проверка
+     * @throws ForbiddenException если пользователь не владелец задачи
+     * @throws ReviewNotPublishableException если попытка публикации пустой проверки
+     */
     public ReviewResponse createReview(UUID submissionId, CreateReviewRequest request, UUID actorId) {
+
         SubmissionView submission = submissionDirectory.find(submissionId)
                 .orElseThrow(SubmissionNotFoundException::new);
 
@@ -57,7 +85,25 @@ public class GradingService {
         return mapToResponse(saved);
     }
 
+    /**
+     * Обновляет существующую проверку.
+     * <p>
+     * Используется patch-семантика: обновляются только те поля, которые переданы в запросе.
+     * Если установлен флаг {@code publish=true}:
+     * - Проверяется, что итоговое состояние проверки (с учетом текущих значений) позволяет публикацию.
+     * - Если проверка была в статусе DRAFT, она переводится в PUBLISHED и фиксируется дата публикации.
+     * - Если проверка уже была PUBLISHED, дата публикации не меняется.
+     *
+     * @param reviewId id проверки
+     * @param request обновляемые поля
+     * @param actorId id учителя, вносящего правки
+     * @return обновленный объект Review в формате ReviewResponse
+     * @throws ReviewNotFoundException если проверка не найдена
+     * @throws ForbiddenException если пользователь не владелец задачи
+     * @throws ReviewNotPublishableException если попытка публикации пустой проверки
+     */
     public ReviewResponse updateReview(UUID reviewId, UpdateReviewRequest request, UUID actorId) {
+
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(ReviewNotFoundException::new);
 
@@ -129,7 +175,20 @@ public class GradingService {
         );
     }
 
+    /**
+     * Формирует журнал оценок по конкретной задаче.
+     * <p>
+     * Доступен только владельцу задачи. Список решений получается через {@link SubmissionDirectory},
+     * затем к каждому решению присоединяются данные о его ручной проверке из репозитория.
+     *
+     * @param problemId id задачи
+     * @param actorId id запрашивающего (должен быть владельцем задачи)
+     * @param reviewed фильтр: true — только опубликованные, false — только не проверенные, null — все
+     * @return список записей журнала
+     * @throws ForbiddenException если пользователь не владелец задачи
+     */
     public List<GradebookEntryResponse> getGradebook(UUID problemId, UUID actorId, Boolean reviewed) {
+
         if (!problemDirectory.ownsProblem(actorId, problemId)) {
             throw new ForbiddenException("Доступ к журналу только для владельца задачи");
         }
@@ -167,7 +226,17 @@ public class GradingService {
         return entries;
     }
 
+    /**
+     * Возвращает список всех опубликованных проверок ученика по конкретной задаче.
+     * <p>
+     * Черновики (DRAFT) в этот список не попадают.
+     *
+     * @param problemId id задачи
+     * @param actorId id ученика
+     * @return список опубликованных проверок
+     */
     public List<StudentReviewResponse> getMyReviews(UUID problemId, UUID actorId) {
+
         List<SubmissionView> submissions = submissionDirectory.listByProblem(problemId);
         
         return submissions.stream()

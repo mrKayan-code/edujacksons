@@ -9,6 +9,9 @@ import java.util.UUID;
  * Строка учительского журнала по задаче.
  * Объединяет данные о решении и его ручной проверке.
  */
+/**
+ * Строка учительского журнала по конкретной задаче.
+ */
 public record GradebookEntryResponse(
     UUID submissionId,
     UUID studentId,
