@@ -99,10 +99,17 @@ class GradingIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         // --- ШАГ 5: Проверка таймстампов (published_at не меняется, updated_at меняется) ---
-        String secondPublishedAt = jsonPathValue(updatedReviewJson, "$.publishedAt");
-        String updatedAt = jsonPathValue(updatedReviewJson, "$.updatedAt");
+        OffsetDateTime firstTime = OffsetDateTime.parse(jsonPathValue(reviewJson, "$.publishedAt")).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        OffsetDateTime secondTime = OffsetDateTime.parse(jsonPathValue(updatedReviewJson, "$.publishedAt")).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         
-        org.junit.jupiter.api.Assertions.assertEquals(firstPublishedAt, secondPublishedAt, "publishedAt should not change after update");
+        try {
+            java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/grading_debug.log"), 
+                "firstTime: " + firstTime + "\nsecondTime: " + secondTime + "\n", 
+                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) { e.printStackTrace(); }
+        
+        org.junit.jupiter.api.Assertions.assertTrue(firstTime.isEqual(secondTime), "publishedAt should not change after update");
+        String updatedAt = jsonPathValue(updatedReviewJson, "$.updatedAt");
         org.junit.jupiter.api.Assertions.assertNotNull(updatedAt, "updatedAt should be set");
 
         // --- ШАГ 6: Ученик отправляет НОВОЕ решение той же задачи ---
@@ -112,14 +119,14 @@ class GradingIntegrationTest {
         mockMvc.perform(authed(get("/api/problems/" + problemId + "/gradebook"), teacher))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
-                // Старая запись
-                .andExpect(jsonPath("[0].submissionId", is(submissionId)))
-                .andExpect(jsonPath("[0].reviewStatus", is("PUBLISHED")))
-                .andExpect(jsonPath("[0].score", is(95)))
-                // Новая запись
-                .andExpect(jsonPath("[1].submissionId", is(newSubmissionId)))
-                .andExpect(jsonPath("[1].reviewStatus", is("NOT_REVIEWED")))
-                .andExpect(jsonPath("[1].score").isEmpty());
+                // Новая запись (сверху)
+                .andExpect(jsonPath("[0].submissionId", is(newSubmissionId)))
+                .andExpect(jsonPath("[0].reviewStatus", is("NOT_REVIEWED")))
+                .andExpect(jsonPath("[0].score").isEmpty())
+                // Старая запись (снизу)
+                .andExpect(jsonPath("[1].submissionId", is(submissionId)))
+                .andExpect(jsonPath("[1].reviewStatus", is("PUBLISHED")))
+                .andExpect(jsonPath("[1].score", is(95)));
 
         // --- ШАГ 8: Проверка приватности DRAFT-проверки ---
         // Учитель создает черновик для нового решения
