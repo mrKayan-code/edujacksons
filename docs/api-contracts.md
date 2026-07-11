@@ -75,8 +75,21 @@
 Коды ошибок: `problem_not_found`/`submission_not_found`/`test_case_not_found` (404),
 `forbidden` (403), `invalid_language` (400), `validation_failed` (400).
 
-### Фаза 3 — grading
-- `POST /api/v1/submissions/{id}/review` (TEACHER)
+### Фаза 3 — grading (спека: `phase-3-grading-spec.md`, ADR `0007`)
+> Путь без `/v1` — как во всех реализованных модулях (`/api/...`); прежний черновик с `/v1` устарел.
+> Ручная проверка — отдельная сущность `Review` (0..1 на решение), ортогональна автопроверке Judge0.
+> Роли: ставит/правит оценку TEACHER-владелец задачи; читает опубликованную оценку ученик-автор.
+- `POST  /api/submissions/{submissionId}/review` (TEACHER) — `{score?0..100, feedback?, publish?}` → `201`
+- `PATCH /api/reviews/{reviewId}` (TEACHER) — правка оценки/фидбэка, публикация; правка `PUBLISHED` задним числом разрешена
+- `GET   /api/reviews/{reviewId}` — TEACHER: полная; STUDENT-автор: только если `PUBLISHED`
+- `GET   /api/submissions/{submissionId}/review` — то же по id решения; нет/черновик для ученика → `404`
+- `GET   /api/problems/{problemId}/gradebook` (TEACHER) — журнал: решения всех учеников + их проверки; `?reviewed=false` = очередь
+- `GET   /api/problems/{problemId}/reviews/mine` (STUDENT) — свои опубликованные оценки по задаче
+
+Статусы проверки: `DRAFT → PUBLISHED` (инициатор — только TEACHER). Производный для ученика:
+`NOT_REVIEWED` (нет записи или только `DRAFT`) / `REVIEWED` (`PUBLISHED`). Не связаны с `SubmissionStatus`.
+Коды ошибок: `review_not_found`/`submission_not_found` (404), `review_exists` (409),
+`review_not_publishable` (400), `forbidden` (403), `validation_failed` (400).
 
 ### Фаза 4 — ege
 - `GET  /api/v1/ege/variants`, `GET /api/v1/ege/variants/{id}`
